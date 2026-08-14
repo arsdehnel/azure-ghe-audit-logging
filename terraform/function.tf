@@ -32,16 +32,16 @@ resource "azurerm_linux_function_app" "webhook_handler" {
   }
 
   app_settings = {
-    "FUNCTIONS_WORKER_RUNTIME"              = "python"
-    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.webhook_function.connection_string
-    "KEYVAULT_URL"                          = azurerm_key_vault.gh_webhook_secret.vault_uri
-    "STORAGE_ACCOUNT_URL"                   = azurerm_storage_account.sec_team_logs.primary_blob_endpoint
+    "FUNCTIONS_WORKER_RUNTIME" = "python"
+    "KEYVAULT_URL"             = azurerm_key_vault.gh_webhook_secret.vault_uri
+    "STORAGE_ACCOUNT_URL"      = azurerm_storage_account.sec_team_logs.primary_blob_endpoint
   }
 
   site_config {
     application_stack {
       python_version = "3.12"
     }
+    application_insights_connection_string = azurerm_application_insights.webhook_function.connection_string
   }
 
   https_only = true
@@ -49,6 +49,13 @@ resource "azurerm_linux_function_app" "webhook_handler" {
   tags = {
     component = "github-webhooks"
     purpose   = "webhook-ingestion"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      app_settings["WEBSITE_RUN_FROM_PACKAGE"],
+      tags["hidden-link: /app-insights-resource-id"],
+    ]
   }
 }
 

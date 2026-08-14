@@ -29,7 +29,7 @@ def get_webhook_secret():
 
 
 @app.function_name("GitHubWebhook")
-@app.route(route="webhook", methods=["POST"])
+@app.route(route="webhook", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
 def webhook_handler(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Webhook received")
 
