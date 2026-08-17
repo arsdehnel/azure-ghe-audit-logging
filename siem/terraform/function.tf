@@ -33,7 +33,6 @@ resource "azurerm_linux_function_app" "webhook_handler" {
 
   app_settings = {
     "FUNCTIONS_WORKER_RUNTIME" = "python"
-    "KEYVAULT_URL"             = azurerm_key_vault.gh_webhook_secret.vault_uri
     "STORAGE_ACCOUNT_URL"      = azurerm_storage_account.sec_team_logs.primary_blob_endpoint
   }
 
@@ -78,14 +77,6 @@ resource "azurerm_application_insights" "webhook_function" {
 # ============================================================================
 # Role Assignments
 # ============================================================================
-
-# Allow Function to read webhook secret from Key Vault
-resource "azurerm_role_assignment" "function_kv_secret_read" {
-  scope                = azurerm_key_vault.gh_webhook_secret.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_function_app.webhook_handler.identity[0].principal_id
-}
-
 # Allow Function to write blobs to webhook storage account
 resource "azurerm_role_assignment" "function_blob_write" {
   scope                = azurerm_storage_account.sec_team_logs.id
