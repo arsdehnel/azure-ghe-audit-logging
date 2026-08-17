@@ -1,0 +1,58 @@
+name: Static Analysis
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/analyze-app.yml"
+      - "app/**" # would probably be force-app/* in a more realistic SF app repo
+
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true # new push to the PR supersedes the old run
+
+jobs:
+  static-analysis:
+    name: Runs PMD Static Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write # required to upload SARIF to GitHub Security
+
+    steps:
+      - name: Checkout (full history for delta computation)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Salesforce CLI + plugins
+        run: |
+          npm install -g @salesforce/cli
+          echo y | sf plugins install sfdx-git-delta
+          sf plugins install code-analyzer
+
+      - name: Static analysis (Code Analyzer / PMD)
+        # continue-on-error ensures the SARIF upload step always runs even if
+        # violations are found. fail-on-violations can re-fail the job after upload.
+        continue-on-error: true
+        id: analysis
+        run: |
+          sf code-analyzer run \
+            --workspace force-app \
+            --rule-selector Recommended \
+            --output-format sarif \
+            --output-file code-analysis-results.sarif
+
+      - name: Upload Code Analyzer results to GitHub Security
+        if: steps.delta.outputs.has_changes == 'true' && always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: code-analysis-results.sarif
+          category: salesforce-code-analyzer
+
+      - name: Enforce violations as PR failure
+        if: steps.delta.outputs.has_changes == 'true' && inputs.fail-on-violations && steps.analysis.outcome == 'failure'
+        run: |
+          echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
+          exit 1
