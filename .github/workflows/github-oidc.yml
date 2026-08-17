@@ -1,4 +1,4 @@
-name: Static Analysis
+name: GitHub OIDC
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Fetch Salesforce credentials from Key Vault
+    - name: Fetch secrets from key vault
       shell: bash
       run: |
         set -euo pipefail
