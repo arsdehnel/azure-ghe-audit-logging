@@ -36,16 +36,18 @@ jobs:
         id: run-code-analyzer
         uses: forcedotcom/run-code-analyzer@v2
         with:
-          run-arguments: --workspace ./app/force-app --view detail --output-file sfca_results.html --output-file sfca_results.json
+          run-arguments: --workspace ./app/force-app --view detail --output-file sfca_results.html --output-file sfca_results.json --output-file salesforce-code-analyzer-results.sarif
           results-artifact-name: salesforce-code-analyzer-results
           github-token: ${{ github.token }}
 
-      - name: Upload Code Analyzer results to GitHub Security
-        if: steps.delta.outputs.has_changes == 'true' && always()
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: code-analysis-results.sarif
-          category: salesforce-code-analyzer
+          # Path to SARIF file relative to the root of the repository
+          sarif_file: salesforce-code-analyzer-results.sarif
+          # Optional category for the results
+          # Used to differentiate multiple results for one commit
+          category: my-analysis-tool
 
       # Option 1: Quality gate on ALL files in the repository
       - name: Fail on Critical/High Violations (All Files)
@@ -54,11 +56,15 @@ jobs:
           steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
           steps.run-code-analyzer.outputs.num-sev2-violations > 0 ||
           steps.run-code-analyzer.outputs.num-violations > 10
-        run: exit 1
+        run: |
+          echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
+          exit 1
 
       # Option 2: Quality gate on CHANGED files only (useful for legacy codebases)
       - name: Fail on Critical/High Violations (Changed Files Only)
         if: |
           steps.run-code-analyzer.outputs.num-sev1-violations-in-changed-files > 0 ||
           steps.run-code-analyzer.outputs.num-sev2-violations-in-changed-files > 0
-        run: exit 1
+        run: |
+          echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
+          exit 1
