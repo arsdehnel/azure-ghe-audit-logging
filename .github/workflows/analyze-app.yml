@@ -16,9 +16,10 @@ jobs:
     name: Runs PMD Static Analysis
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      pull-requests: write # allows creation of PR review
       contents: read
       security-events: write # required to upload SARIF to GitHub Security
+      actions: read # required for private repos
 
     steps:
       - name: Checkout (full history for delta computation)
