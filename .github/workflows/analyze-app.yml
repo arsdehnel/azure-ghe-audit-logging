@@ -39,10 +39,8 @@ jobs:
         id: analysis
         run: |
           sf code-analyzer run \
-            --workspace force-app \
-            --rule-selector Recommended \
-            --output-format sarif \
-            --output-file code-analysis-results.sarif
+            --workspace app/force-app \
+            --rule-selector Recommended
 
       - name: Upload Code Analyzer results to GitHub Security
         if: steps.delta.outputs.has_changes == 'true' && always()
