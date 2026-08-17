@@ -14,4 +14,5 @@ This is roughly from a client project where they wanted me to setup GitHub Enter
 
 - **📂 siem**: holds Terraform and Python for the audit logging of GitHub based on the plan of their team getting it from Azure Blob Storage to Sentinel
 - **📂 org:** holds Terraform that would (in the real implementation) be a per-org implementation of Azure Key Vault, Entra App, and Resource Groups
+- **📂 app:** holds a mock app that uses GitHub Actions OIDC to pull in an Azure Key Vault secret for the organization to prove out the token exchange and access pattern
 - **📂 .github:** the workflows for proving out the OIDC workflow in Actions to get Azure Secrets
