@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true # new push to the PR supersedes the old run
 
 jobs:
-  static-analysis:
-    name: Runs PMD Static Analysis
+  analyze-app:
+    name: Analyze App
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write # allows creation of PR review
