@@ -21,34 +21,46 @@ credential = DefaultAzureCredential()
 def webhook_handler(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Webhook received")
 
+    signature_header = req.headers.get("X-Hub-Signature-256", "")
+    if not signature_header.startswith("sha256="):
+        return func.HttpResponse("Invalid signature", status_code=401)
+
+    body = req.get_body()
+
+    # parse org from body to find the right KV, but don't trust it yet
     try:
-        event = req.get_json()
-        for key in event.keys():
-            logging.info(key)
-        org_name = event.get('organization', {}).get('login')        
-        keyvault_url = f"https://kv-{org_name}.vault.azure.net/"
-        kv_client = SecretClient(vault_url=keyvault_url, credential=credential)
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return func.HttpResponse("Invalid JSON", status_code=400)
 
+    org_name = payload.get("organization", {}).get("login")
+    if not org_name:
+        return func.HttpResponse("Missing organization", status_code=400)
+
+    kv_client = SecretClient(vault_url=f"https://kv-{org_name}.vault.azure.net/", credential=credential)
+    try:
         webhook_secret = kv_client.get_secret("gh-to-azure-webhook-secret").value
+    except Exception:
+        return func.HttpResponse("Unauthorized", status_code=401)
 
-        signature_header = req.headers.get("X-Hub-Signature-256", "")
-        if not signature_header.startswith("sha256="):
-            return func.HttpResponse("Invalid signature", status_code=401)
+    expected = "sha256=" + hmac.new(webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature_header, expected):
+        return func.HttpResponse("Signature mismatch", status_code=401)
 
-        body = req.get_body()
-        expected_signature = "sha256=" + hmac.new(
-            webhook_secret.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
-
-        if not hmac.compare_digest(signature_header, expected_signature):
-            return func.HttpResponse("Signature validation failed", status_code=401)
-
+    try:
         event_type = req.headers.get("X-GitHub-Event", "unknown")
+        delivery_id = req.headers.get("X-GitHub-Delivery", "unknown")
 
         now = datetime.now(timezone.utc)
-        blob_path = f"webhooks/{event_type}/{now.year:04d}/{now.month:02d}/{now.day:02d}/{now.isoformat()}.json"
+        blob_path = f"webhooks/{event_type}/{now.year:04d}/{now.month:02d}/{now.day:02d}/{delivery_id}.json"
+
+        envelope = {
+            "delivery_id": delivery_id,
+            "event_type": event_type,
+            "received_at": now.isoformat(),
+            "org": org_name,
+            "payload": payload,
+        }
 
         blob_client = BlobClient(
             account_url=STORAGE_ACCOUNT_URL,
@@ -57,13 +69,11 @@ def webhook_handler(req: func.HttpRequest) -> func.HttpResponse:
             credential=credential
         )
 
-        blob_client.upload_blob(json.dumps(event), overwrite=False)
+        blob_client.upload_blob(json.dumps(envelope), overwrite=True)
         logging.info(f"Event written to blob: {blob_path}")
 
         return func.HttpResponse(json.dumps({"status": "ok"}), status_code=202)
 
-    except json.JSONDecodeError:
-        return func.HttpResponse("Invalid JSON", status_code=400)
     except Exception as e:
         logging.error(f"Error: {str(e)}")
         return func.HttpResponse("Error", status_code=500)
