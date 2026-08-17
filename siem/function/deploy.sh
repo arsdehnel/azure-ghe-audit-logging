@@ -20,8 +20,8 @@ cd function-app && func azure functionapp publish $FUNCTION_APP --python && cd .
 
 # 4. Get webhook secret from Key Vault
 WEBHOOK_SECRET=$(az keyvault secret show \
-  --vault-name gh-webhook-secret \
-  --name github-webhook-secret \
+  --vault-name kv-salesforce-cicd-demo \
+  --name gh-to-azure-webhook-secret \
   --query value -o tsv)
 
 # 5. Create or update org webhook in GitHub

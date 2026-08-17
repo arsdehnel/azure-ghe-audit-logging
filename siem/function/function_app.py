@@ -11,22 +11,10 @@ from azure.storage.blob import BlobClient
 
 app = func.FunctionApp()
 
-KEYVAULT_URL = os.environ["KEYVAULT_URL"]
 STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
 CONTAINER_NAME = "github-webhooks"
 
 credential = DefaultAzureCredential()
-kv_client = SecretClient(vault_url=KEYVAULT_URL, credential=credential)
-
-_webhook_secret = None
-
-
-def get_webhook_secret():
-    global _webhook_secret
-    if _webhook_secret is None:
-        _webhook_secret = kv_client.get_secret("github-webhook-secret").value
-    return _webhook_secret
-
 
 @app.function_name("GitHubWebhook")
 @app.route(route="webhook", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
@@ -34,7 +22,14 @@ def webhook_handler(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Webhook received")
 
     try:
-        webhook_secret = get_webhook_secret()
+        event = req.get_json()
+        for key in event.keys():
+            logging.info(key)
+        org_name = event.get('organization', {}).get('login')        
+        keyvault_url = f"https://kv-{org_name}.vault.azure.net/"
+        kv_client = SecretClient(vault_url=keyvault_url, credential=credential)
+
+        webhook_secret = kv_client.get_secret("gh-to-azure-webhook-secret").value
 
         signature_header = req.headers.get("X-Hub-Signature-256", "")
         if not signature_header.startswith("sha256="):
@@ -50,7 +45,6 @@ def webhook_handler(req: func.HttpRequest) -> func.HttpResponse:
         if not hmac.compare_digest(signature_header, expected_signature):
             return func.HttpResponse("Signature validation failed", status_code=401)
 
-        event = req.get_json()
         event_type = req.headers.get("X-GitHub-Event", "unknown")
 
         now = datetime.now(timezone.utc)
