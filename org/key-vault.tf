@@ -24,3 +24,10 @@ resource "azurerm_key_vault_secret" "gh_webhook_secret" {
   # which gives our Terraform commands permissions to create this secret
   depends_on = [azurerm_role_assignment.terraform_kv_secrets_officer]
 }
+
+# allow the security team's function to read this secret
+resource "azurerm_role_assignment" "function_kv_secret_read" {
+  scope                = azurerm_key_vault.github_org_scoped_key_vault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.sec_team_function_principal_id
+}
