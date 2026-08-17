@@ -1,5 +1,5 @@
 resource "azurerm_key_vault" "github_org_scoped_key_vault" {
-  name                        = "ghe-org-kv-${var.org_name}"
+  name                        = "kv-${var.org_name}"
   location                    = azurerm_resource_group.org_resources.location
   resource_group_name         = azurerm_resource_group.org_resources.name
   rbac_authorization_enabled  = true
