@@ -26,21 +26,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Salesforce CLI + plugins
+      - name: Install Salesforce CLI + plugin
         run: |
-          npm install -g @salesforce/cli
-          echo y | sf plugins install sfdx-git-delta
-          sf plugins install code-analyzer
+          npm install -g @salesforce/cli@latest
+          sf plugins install code-analyzer@latest
 
-      - name: Static analysis (Code Analyzer / PMD)
-        # continue-on-error ensures the SARIF upload step always runs even if
-        # violations are found. fail-on-violations can re-fail the job after upload.
-        continue-on-error: true
-        id: analysis
-        run: |
-          sf code-analyzer run \
-            --workspace app/force-app \
-            --rule-selector Recommended
+      - name: Run Salesforce Code Analyzer
+        id: run-code-analyzer
+        uses: forcedotcom/run-code-analyzer@v2
+        with:
+          run-arguments: --workspace ./app/force-app --view detail --output-file sfca_results.html --output-file sfca_results.json
+          results-artifact-name: salesforce-code-analyzer-results
+          github-token: ${{ github.token }}
 
       - name: Upload Code Analyzer results to GitHub Security
         if: steps.delta.outputs.has_changes == 'true' && always()
@@ -49,8 +46,18 @@ jobs:
           sarif_file: code-analysis-results.sarif
           category: salesforce-code-analyzer
 
-      - name: Enforce violations as PR failure
-        if: steps.delta.outputs.has_changes == 'true' && inputs.fail-on-violations && steps.analysis.outcome == 'failure'
-        run: |
-          echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
-          exit 1
+      # Option 1: Quality gate on ALL files in the repository
+      - name: Fail on Critical/High Violations (All Files)
+        if: |
+          steps.run-code-analyzer.outputs.exit-code > 0 ||
+          steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-violations > 10
+        run: exit 1
+
+      # Option 2: Quality gate on CHANGED files only (useful for legacy codebases)
+      - name: Fail on Critical/High Violations (Changed Files Only)
+        if: |
+          steps.run-code-analyzer.outputs.num-sev1-violations-in-changed-files > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations-in-changed-files > 0
+        run: exit 1
