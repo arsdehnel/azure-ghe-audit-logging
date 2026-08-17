@@ -11,6 +11,8 @@ jobs:
   github-oidc:
     name: GitHub OIDC
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for the azure login
     steps:
       - name: Azure login (OIDC — no stored credentials)
         uses: azure/login@v2
