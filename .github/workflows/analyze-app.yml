@@ -1,24 +1,25 @@
-name: Static Analysis
+name: Analyze App
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - ".github/workflows/analyze-app.yml"
-      - "app/**" # would probably be force-app/* in a more realistic SF app repo
+    # paths:
+    #   - ".github/workflows/analyze-app.yml"
+    #   - "app/**" # would probably be force-app/* in a more realistic SF app repo
 
 concurrency:
   group: pr-validate-${{ github.event.pull_request.number }}
   cancel-in-progress: true # new push to the PR supersedes the old run
 
 jobs:
-  static-analysis:
-    name: Runs PMD Static Analysis
+  analyze-app:
+    name: Analyze App
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      pull-requests: write # allows creation of PR review
       contents: read
       security-events: write # required to upload SARIF to GitHub Security
+      actions: read # required for private repos
 
     steps:
       - name: Checkout (full history for delta computation)
@@ -26,33 +27,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Salesforce CLI + plugins
+      - name: Install Salesforce CLI + plugin
         run: |
-          npm install -g @salesforce/cli
-          echo y | sf plugins install sfdx-git-delta
-          sf plugins install code-analyzer
+          npm install -g @salesforce/cli@latest
+          sf plugins install code-analyzer@latest
 
-      - name: Static analysis (Code Analyzer / PMD)
-        # continue-on-error ensures the SARIF upload step always runs even if
-        # violations are found. fail-on-violations can re-fail the job after upload.
-        continue-on-error: true
-        id: analysis
-        run: |
-          sf code-analyzer run \
-            --workspace force-app \
-            --rule-selector Recommended \
-            --output-format sarif \
-            --output-file code-analysis-results.sarif
-
-      - name: Upload Code Analyzer results to GitHub Security
-        if: steps.delta.outputs.has_changes == 'true' && always()
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Run Salesforce Code Analyzer
+        id: run-code-analyzer
+        uses: forcedotcom/run-code-analyzer@v2
         with:
-          sarif_file: code-analysis-results.sarif
-          category: salesforce-code-analyzer
+          run-arguments: --workspace ./app/force-app --view detail --output-file sfca_results.html --output-file sfca_results.json --output-file salesforce-code-analyzer-results.sarif
+          results-artifact-name: salesforce-code-analyzer-results
+          github-token: ${{ github.token }}
 
-      - name: Enforce violations as PR failure
-        if: steps.delta.outputs.has_changes == 'true' && inputs.fail-on-violations && steps.analysis.outcome == 'failure'
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          # Path to SARIF file relative to the root of the repository
+          sarif_file: salesforce-code-analyzer-results.sarif
+          # Optional category for the results
+          # Used to differentiate multiple results for one commit
+          category: my-analysis-tool
+
+      # Option 1: Quality gate on ALL files in the repository
+      - name: Fail on Critical/High Violations (All Files)
+        if: |
+          steps.run-code-analyzer.outputs.exit-code > 0 ||
+          steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-violations > 10
+        run: |
+          echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
+          exit 1
+
+      # Option 2: Quality gate on CHANGED files only (useful for legacy codebases)
+      - name: Fail on Critical/High Violations (Changed Files Only)
+        if: |
+          steps.run-code-analyzer.outputs.num-sev1-violations-in-changed-files > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations-in-changed-files > 0
         run: |
           echo "::error::Code Analyzer found violations. See Security → Code scanning alerts for details."
           exit 1

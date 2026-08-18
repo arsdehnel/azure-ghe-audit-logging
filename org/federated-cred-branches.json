@@ -1,0 +1,11 @@
+{
+    "name": "ghe-oidc-branches-${GH_ORG_NAME}",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "audiences": [
+        "api://AzureADTokenExchange"
+    ],
+    "claimsMatchingExpression": {
+        "languageVersion": 1,
+        "value": "claims['sub'] matches 'repo:${GH_ORG_NAME}*:ref:refs/heads/*' and claims['repository_owner_id'] eq '${GH_ORG_ID}'"
+    }
+}
